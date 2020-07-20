@@ -1,0 +1,28 @@
+display: ":0.0"
+app_directory: "~/.py-docker-x11/apps"
+profile_directory: "~/.py-docker-x11/profiles"
+paSocket: "/tmp/pulse-socket"
+htpc: 
+  enabled: False
+  binary: "htpc-binary"
+docker:
+  userSubUID: 297610
+  groupSubUID: 297611
+appDirs:
+  linux: "~/.py-docker-x11/apps/linux"
+  windows: "~/.py-docker-x11/apps/windows"
+container:
+  init: "/usr/bin/dumb-init"
+  mounts:
+    /etc/localtime: "/etc/localtime"
+  user: "sandbox"
+devices:
+  joystick:
+    enabled: False
+  audio: False
+  hwrender: False
+  network: True
+scripts:
+  pre_run: "echo \"No pre_run script defined\""
+  post_run: "echo \"No post_run script defined\""
+  post_exit: "echo \"No post_exit script defined\""
