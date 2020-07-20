@@ -213,7 +213,7 @@ def mergeConfig(a, b):
 def renderConfig(config, yamlFile, delete=False, **kwargs):
     template = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(yamlFile))))
     rendered_jinja = template.get_template(os.path.basename(yamlFile)).render(kwargs)
-    rendered_yaml = yaml.load(rendered_jinja, Loader=SafeLoader)
+    rendered_yaml = yaml.load(rendered_jinja, Loader=yaml.SafeLoader)
     return mergeConfig(config, rendered_yaml)
 
 def checkUser(user):
