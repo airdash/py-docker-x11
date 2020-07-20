@@ -213,7 +213,7 @@ def mergeConfig(a, b):
 def renderConfig(config, yamlFile, delete=False, **kwargs):
     template = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.dirname(os.path.abspath(yamlFile))))
     rendered_jinja = template.get_template(os.path.basename(yamlFile)).render(kwargs)
-    rendered_yaml = yaml.load(rendered_jinja)
+    rendered_yaml = yaml.load(rendered_jinja, Loader=SafeLoader)
     return mergeConfig(config, rendered_yaml)
 
 def checkUser(user):
@@ -276,7 +276,7 @@ def main():
     
     jinja_render_args = { "current_user": current_user}
 
-    baseConfigDir = os.path.join("/home", "userdata", "bin", "docker-x11")
+    baseConfigDir = os.path.join(os.path.join(os.path.expanduser("~"), ".py-docker-x11"))
 
     if args.profile =='wine-update':
         user_profile = current_user
