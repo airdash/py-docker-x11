@@ -1,17 +1,16 @@
-display: ":0.0"
-app_directory: "~/.py-docker-x11/apps"
-profile_directory: "~/.py-docker-x11/profiles"
-paSocket: "/tmp/pulse-socket"
+appDirs:
+  default: "~/.py-docker-x11/apps"
+  linux: "~/.py-docker-x11/apps/linux"
+  windows: "~/.py-docker-x11/apps/windows"
+profileDir: "~/.py-docker-x11/profiles"
 htpc: 
   enabled: False
   binary: "htpc-binary"
 docker:
   userSubUID: 297610
   groupSubUID: 297611
-appDirs:
-  linux: "~/.py-docker-x11/apps/linux"
-  windows: "~/.py-docker-x11/apps/windows"
 container:
+  display: ":0.0"
   init: "/usr/bin/dumb-init"
   mounts:
     /etc/localtime: "/etc/localtime"
@@ -19,7 +18,9 @@ container:
 devices:
   joystick:
     enabled: False
-  audio: False
+  audio: 
+    enabled: False
+    paSocket: "/tmp/pulse-socket"
   hwrender: False
   network: True
 scripts:

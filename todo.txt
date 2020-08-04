@@ -1,0 +1,6 @@
+* Fix and detect Vulkan compatibility
+* Detect when joysticks won't have sufficient permissions to work inside container as sandbox user
+* Fix post_run script (is pgrep working?)
+* Fix error messages when config is incorrect, and when image is missing/misspelled.
+* Allow for automatically pulling images when not found
+* Create Docker network when not found, and parameter is set correctly

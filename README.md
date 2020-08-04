@@ -1,2 +1,5 @@
 # py-docker-x11
-An opinionated way of running x11 apps on Docker
+
+* THIS IS WIP, SUBJECT TO CHANGE, MISSING THINGS AND PROBABLY BROKEN / WON'T WORK FOR YOU *
+
+An opinionated way of running x11 apps on Docker. 

@@ -1,0 +1,41 @@
+{%- set platform = "linux" %}
+{%- set application = "Firefox" %}
+
+platform: "{{ platform }}"
+platform_options:
+  debug: False
+  esync: False
+  koku_hack: False
+  pba: True
+appconfig:
+  appname: "{{ application }}"
+  exepath: "/usr/bin/firefox"
+  executable: "firefox"
+  runningExecutable: "firefox"
+  internalAppDir: "/usr/bin"
+  programArgs: ""
+  use_subprofiles: True
+build:
+  command: "/usr/bin/firefox"
+  entrypoint: "/usr/bin/dumb-init"
+  dockerfile: "Dockerfile"
+  image: "py-docker-x11/firefox"
+  tag: "latest"
+container:    
+  image: "py-docker-x11/firefox"
+  tag: "latest"
+devices:
+  audio: 
+    enabled: True
+  hwrender: 
+    enabled: True
+  joystick: 
+    enabled: False
+  network:
+    enabled: True
+scripts:
+  post_run: |
+      #!/bin/sh
+  
+      sleep 10
+      xgamma -gamma 1.0
