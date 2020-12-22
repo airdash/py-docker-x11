@@ -3,30 +3,76 @@ import jinja2, yaml
 import functools
 import collections
 import importlib
+import re
 
 class YamlReaderError(Exception):
     pass
 
 class Config:
-    def __init__(self, args, client):
+    def __init__(self, args, container_args, client):
         base_dir = os.path.join(os.path.expanduser("~"), ".py-docker-x11")
-        profile_user = args.profile
-        jinja_render_args = { "current_user" : os.getenv("USER"), "profile_user" : profile_user }
+        current_user = os.getlogin()
+
+        if args.profile is not None:
+            profile_user = args.profile
+        else:
+            profile_user = current_user
+        
 
         base_config_yamlfile = self._getBaseConfig(base_dir)
-        base_config = self._renderConfig(base_config_yamlfile, **jinja_render_args)
+        base_config = self._renderConfig(base_config_yamlfile)
 
-        jinja_render_args["container_user"] = base_config["container"]["user"]
-        jinja_render_args["profile_dir"] = base_config["profileDir"]
+        # Overwrite current_user and profile_user via base-config
+        if base_config.get("user") is not None:
+            current_user = base_config["user"]
+            if args.profile is None:
+                profile_user = current_user
+
+        if args.subprofile is not None:
+            subprofile_user = args.subprofile
+        else:
+            subprofile_user = profile_user
+
+        jinja_render_args = { 
+                              "current_user" : current_user, 
+                              "profile_user" : profile_user, 
+                              "subprofile_user" : subprofile_user,
+                              "container_user" : base_config["container"]["user"],
+                              "profile_dir" : base_config["profileDir"]
+                            }
 
         if args.image is not None:
             image = args.image.split(':')[0]
             try:
                 tag = args.image.split(':')[1]
+                print("tag is %s" % tag)
             except IndexError:
                 tag = "latest"
+
+            if not client.images(name=image):
+                try:
+                    print("Image not found locally, attempting pull from remote.")
+                    client.pull(image, tag=tag)
+                except:
+                    print("Requested image not found, and no local image found. Exiting.")
+                    sys.exit(255)
+            elif base_config["container"]["always_pull"] == True:
+                try:
+                    print("Pulling latest image from remote.")
+                    print("tag is %s" % tag)
+                    client.pull(image, tag=tag)
+                except:
+                    print("Requested image found locally but not found in remote. Continuing.")
+
+            if client.inspect_image(image + ":" + tag)["ContainerConfig"]["Entrypoint"]:
+                print("Entrypoint is %s" % client.inspect_image(image + ":" + tag)["ContainerConfig"]["Entrypoint"])
+                entrypoint = client.inspect_image(image + ":" + tag)["ContainerConfig"]["Entrypoint"]
+            else:
+                entrypoint = None
+
         else:
             image = None
+            entrypoint = None
 
         if image is not None and self._getDockerImageAppConfig(client, image, tag):
             app_config = self._renderConfig(self._getDockerImageAppConfig(client, image, tag), **jinja_render_args)
@@ -34,15 +80,19 @@ class Config:
             app_dir = base_config["appDirs"].get("default", os.path.join(os.path.expanduser("~"), ".py-docker-x11", "apps"))
             app_config_yamlfile = self._getAppConfig(app_dir, args.app, args.platform)
             app_config = self._renderConfig(app_config_yamlfile, **jinja_render_args)
-        
-        profile_config_yamlfile = self._getProfileConfig(base_config["profileDir"], profile_user, app_config["platform"], 
-                                                         app_config["appconfig"]["app_name"])
+ 
+        if app_config["appconfig"].get("use_subprofiles") == True:
+            profile_config_yamlfile = self._getProfileConfig(base_config["profileDir"], profile_user, app_config["platform"], 
+                                      app_config["appconfig"]["app_name"], subprofile=subprofile_user)
+        else:
+            subprofile_user = None
+            profile_config_yamlfile = self._getProfileConfig(base_config["profileDir"], profile_user, app_config["platform"], 
+                                      app_config["appconfig"]["app_name"])
 
         if profile_config_yamlfile:
-            profile_config = self.renderConfig(self._getProfileConfig(), **jinja_render_args)
+            profile_config = self._renderConfig(profile_config_yamlfile, **jinja_render_args)
         else:
             profile_config = {}
-
 
         if profile_config.get("profileUser") is not None and profile_config.get("profileUser") is not profile_user:
             profile_user = self.config["profileUser"]
@@ -50,20 +100,79 @@ class Config:
 
         self.config = self._mergeConfig(base_config, app_config, profile_config)
 
-        self.config["profileUser"] = profile_user
+        for name, dir in self.config["appDirs"].items():
+            self.config["appDirs"][name] = os.path.expanduser(dir)
+        self.config["profileDir"] = os.path.expanduser(self.config["profileDir"])
+        self.config["workDir"] = os.path.expanduser(self.config["workDir"])
 
-        # Hack until we have a .set() method and support for --user
-        self.config["currentUser"] = os.getenv("USER")
+        if self.config.get("seccomp_dir"):
+            self.config["seccomp_dir"] = os.path.expanduser(self.config["seccomp_dir"])
+        
+        self.config["currentUser"] = current_user
+        self.config["profileUser"] = profile_user
+        self.config["subprofileUser"] = subprofile_user
+
+        if args.app:
+            self.config["app_name_override"] = args.app
+
+        if entrypoint:
+            print("Setting entrypoint as %s" % entrypoint)
+            self.config["container"]["entrypoint"] = entrypoint
 
         # Handle special command line arguments
-        if args.entrypoint:
+        print("[DEBUG] - Entrypoint arg is %s" % args.entrypoint)
+
+        if args.entrypoint and args.entrypoint is not entrypoint:
             self.config["container"]["entrypoint"] = args.entrypoint
 
-        if args.tty:
+        elif args.install or args.maintenance:
+            self.config["container"]["entrypoint"] = "/bin/sh"
+
+        if args.tty or args.maintenance or args.install:
             self.config["container"]["tty"] = True
 
-        if args.interactive:
+        if args.interactive or args.maintenance or args.install:
             self.config["container"]["stdin_open"] = True
+
+        if args.install:
+            self.config["install"] = True
+
+        if args.no_mount:
+            self.config["no_mount"] = True
+
+        if args.no_state:
+            self.config["no_state"] = True
+
+        if args.maintenance or args.install:
+            self.config["container"]["workdir"] = '/'
+            self.config["maintenance"] = True
+        
+        if container_args and self.config["container"].get("entrypoint"):
+            print(" ========> Entrypoint before is %s" % self.config["container"]["entrypoint"])
+            print(" ========> Container args is %s" % container_args)
+
+            if isinstance(self.config["container"]["entrypoint"], str):
+                container_entrypoint = [ self.config["container"]["entrypoint"] ]
+            else:
+                container_entrypoint = self.config["container"]["entrypoint"]
+
+            if isinstance(container_args, list):
+                # Docker prepends script entrypoints with "/bin/sh -c" so we need to add quotes and concatinate the script with the provided
+                # arguments, otherwise things don't work. I don't know if it ever prepends anything else but let's account for bash
+                if (container_entrypoint[0] == "/bin/sh" or container_entrypoint[0] == "/bin/bash") and container_entrypoint[1] == "-c":
+                    print("==========> STRING MANGLING GOIN ON")
+                    container_entrypoint = [ container_entrypoint[0], container_entrypoint[1], (" ".join(container_entrypoint[2:]) + " " + " ".join(container_args)) ]
+                else:
+                    container_entrypoint.extend(container_args)
+            else:
+                container_entrypoint.append(container_args)
+
+            self.config["container"]["entrypoint"] = container_entrypoint
+            
+            print(" ========> Entrypoint is now %s" % self.config["container"]["entrypoint"])
+
+        print("Profile user is %s" % profile_user)
+        print("Current user is %s" % current_user)
 
         try:
             platform = importlib.import_module("platforms." + self.getPlatform())
@@ -72,12 +181,13 @@ class Config:
             print("Could not find the platform module for your platform! Please check the platforms directory and your configuration.")
             print("Continuing without configuring for the %s platform." % config.getPlatform())
 
-
     ### Based on https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries/7205107#7205107
     def _mergeConfig(self, a, b, c=None):
         try:
             if a is None or isinstance(a, str) or isinstance(a, int) or isinstance(a, float):
                 a = b
+            elif b is None:
+                return a
             elif isinstance(a, list):
                 if isinstance(b, list):
                     a.extend(b)
@@ -179,12 +289,17 @@ class Config:
             print("[ERROR] app_config.yaml not found! Please place app_config.yaml in this directory or in the appropriate app directory.")
             sys.exit(1)
     
-    def _getProfileConfig(self, profile_dir, user_profile, platform, app):
-        print("Looking for ", os.path.join(profile_dir, user_profile, platform, app, "profile_config.yaml"))
-        if os.path.exists(os.path.join(profile_dir, user_profile, platform, app, "profile_config.yaml")):
-            return os.path.join(profile_dir, user_profile, platform, app, "profile_config.yaml")
+    def _getProfileConfig(self, profile_dir, user_profile, platform, app, subprofile=None):
+        if subprofile:
+            print("Looking for ", os.path.join(profile_dir, user_profile, platform, app, subprofile, "profile_config.yaml"))
+            if os.path.exists(os.path.join(profile_dir, user_profile, platform, app, subprofile, "profile_config.yaml")):
+                return os.path.join(profile_dir, user_profile, platform, app, subprofile, "profile_config.yaml")
         else:
-            return False
+            print("Looking for ", os.path.join(profile_dir, user_profile, platform, app, "profile_config.yaml"))
+            if os.path.exists(os.path.join(profile_dir, user_profile, platform, app, "profile_config.yaml")):
+                return os.path.join(profile_dir, user_profile, platform, app, subprofile, "profile_config.yaml")
+
+        return False
 
     # Returns None for statements made for handling such cases
     def get(self, *args):
@@ -195,7 +310,7 @@ class Config:
         retval = functools.reduce(lambda curr, arg: curr.get(arg) if curr else None, args, self.config)
 
         if retval is None:
-            raise Exception("Failed to get config value! Something is wrong.")
+            raise Exception("Failed to get config value %s! Something is wrong." % args)
         else:
             return retval
 
@@ -266,6 +381,12 @@ class Config:
     
     def setWorkingDir(self, working_dir):
         self.config["container"]["workingDir"] = working_dir
+
+    def setPreRunScript(self, script):
+        self.config["scripts"]["pre_run"] = script
+
+    def setRunningExecutable(self, executable):
+        self.config["appconfig"]["running_executable"] = executable
 
     def printConfig(self, config):
         # For debug purposes. Pretty prints the entire loaded config

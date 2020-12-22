@@ -1,8 +1,10 @@
 appDirs:
+  base: "~/.py-docker-x11"
   default: "~/.py-docker-x11/apps"
   linux: "~/.py-docker-x11/apps/linux"
   windows: "~/.py-docker-x11/apps/windows"
 profileDir: "~/.py-docker-x11/profiles"
+workDir: "~/.py-docker-x11/work"
 htpc: 
   enabled: False
   binary: "htpc-binary"
