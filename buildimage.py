@@ -22,8 +22,8 @@ def getBaseConfig(base_dir):
         return os.path.join(os.getcwd(), "base_config.yaml")
 
     # Else, let's check the user's home directory (where it should be)
-    if os.path.exists(os.path.join(os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml"))):
-        return os.path.join(os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml"))
+    if os.path.exists(os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml")):
+        return os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml")
     else:
         return False
 
