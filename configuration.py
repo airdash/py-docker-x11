@@ -9,7 +9,7 @@ class YamlReaderError(Exception):
     pass
 
 class Config:
-    def __init__(self, args, container_args, client):
+    def __init__(self, args, client):
         base_dir = os.path.join(os.path.expanduser("~"), ".py-docker-x11")
         current_user = os.getlogin()
 
@@ -124,6 +124,7 @@ class Config:
 
         if args.entrypoint and args.entrypoint is not entrypoint:
             self.config["container"]["entrypoint"] = args.entrypoint
+            self.config["container"]["entrypoint_override"] = True
 
         elif args.install or args.maintenance:
             self.config["container"]["entrypoint"] = "/bin/sh"
@@ -147,30 +148,6 @@ class Config:
             self.config["container"]["workdir"] = '/'
             self.config["maintenance"] = True
         
-        if container_args and self.config["container"].get("entrypoint"):
-            print(" ========> Entrypoint before is %s" % self.config["container"]["entrypoint"])
-            print(" ========> Container args is %s" % container_args)
-
-            if isinstance(self.config["container"]["entrypoint"], str):
-                container_entrypoint = [ self.config["container"]["entrypoint"] ]
-            else:
-                container_entrypoint = self.config["container"]["entrypoint"]
-
-            if isinstance(container_args, list):
-                # Docker prepends script entrypoints with "/bin/sh -c" so we need to add quotes and concatinate the script with the provided
-                # arguments, otherwise things don't work. I don't know if it ever prepends anything else but let's account for bash
-                if (container_entrypoint[0] == "/bin/sh" or container_entrypoint[0] == "/bin/bash") and container_entrypoint[1] == "-c":
-                    print("==========> STRING MANGLING GOIN ON")
-                    container_entrypoint = [ container_entrypoint[0], container_entrypoint[1], (" ".join(container_entrypoint[2:]) + " " + " ".join(container_args)) ]
-                else:
-                    container_entrypoint.extend(container_args)
-            else:
-                container_entrypoint.append(container_args)
-
-            self.config["container"]["entrypoint"] = container_entrypoint
-            
-            print(" ========> Entrypoint is now %s" % self.config["container"]["entrypoint"])
-
         print("Profile user is %s" % profile_user)
         print("Current user is %s" % current_user)
 
@@ -334,7 +311,10 @@ class Config:
             if self.config["devices"].get(device_type) is not None:
                 return self.config["devices"].get(device_type)
             else:
-                print("%s is not found under devices. Check your configs and try again." % device_type)
+                return None
+        else:
+            return None
+
         return self.config.get("devices")
 
     def getHTPCConfig(self):

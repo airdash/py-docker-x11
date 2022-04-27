@@ -34,24 +34,25 @@ def parseArguments():
     parser.add_argument("-x", "--xpra", action='store_true', help="Run container inside of a new xpra session.")
     parser.add_argument("--x11", action='store_true', help="Run container inside of a new X11 session.")
     parser.add_argument("image", nargs="?", default=None, help="Image + tag to run and import app_config from, if applicable.")
-    args, container_args = parser.parse_known_args()
+    parser.add_argument("argv", nargs=argparse.REMAINDER, help="Arguments to pass to the container")
+    args = parser.parse_args()
 
-    return args, container_args
+    return args
 
 def main():
 
     print("Using docker-py version %s" % docker.version)
-    args, container_args = parseArguments()
+    args = parseArguments()
 
     if args.socket:
         socket = args.socket
     else:
-        socket = 'unix://home/docker/sockets/sandbox/docker.sock'
-    # else:
-    #     socket = 'unix://var/lib/docker/docker.sock'
+        # socket = config.get("docker_socket")
+        socket = "unix:///home/docker/sandbox/socket/docker.sock"
+        # socket = "unix:///run/user/1001/docker.sock"
 
     client = docker.APIClient(base_url=socket)
-    config = configuration.Config(args, container_args, client)
+    config = configuration.Config(args, client)
 
     if args.debug == True:
         print("Run complete. Below is the complete config.")
