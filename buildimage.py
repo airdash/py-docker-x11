@@ -5,123 +5,105 @@ import argparse
 import yaml
 import os, sys
 import re
-import glob
-import jinja2
+from build.dag import DAG
+from build.build import Build
+from build.builder import Builder
 
-class NullUndefined(jinja2.Undefined):
-    def __getitem__(self, key):
-        return self
-    def __getattr_(self, key):
-        return self
-
-def getBaseConfig(base_dir):
-
-    # If the yaml's here for some reason, just use it.
-    if os.path.exists(os.path.join(os.getcwd(), "base_config.yaml")):
-        print("[WARN] Using base_config.yaml in current directory!")
-        return os.path.join(os.getcwd(), "base_config.yaml")
-
-    # Else, let's check the user's home directory (where it should be)
-    if os.path.exists(os.path.join(os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml"))):
-        return os.path.join(os.path.join(os.path.expanduser("~"), ".py-docker-x11", "base_config.yaml"))
+def find_yaml_files(path, recurse=True):
+    found_files = []
+    if recurse:
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if file == "app_config.yaml" or file == "app_config.yml":
+                    found_files.append(os.path.join(root, file))
+                elif file.endswith((".yaml", ".yml")) and "config" in root:
+                    found_files.append(os.path.join(root, file))
     else:
-        return False
+        if os.path.exists(os.path.join(path, "app_config.yaml")):
+            found_files.append(os.path.join(path, "app_config.yaml"))
+        elif os.path.exists(os.path.join(path, "app_config.yml")):
+            found_files.append(os.path.join(path, "app_config.yml"))
 
-def getAppConfig(file):
-    with open(file) as jinja_file:
-        raw_jinja = jinja_file.read()
-    # template = jinja2.Environment(loader=jinja2.FileSystemLoader(os.getcwd()), undefined=NullUndefined)
-    # rendered_yaml_file = template.get_template("app_config.yaml").render()
+    return found_files
 
-    # This may not be necessary
-    app_config_yaml = re.sub(r".*\{[{%].*\n", "", raw_jinja)
+def getBaseConfig():
 
-    app_config = yaml.load(app_config_yaml, Loader=yaml.SafeLoader)
-    return raw_jinja, app_config
+    # Check if the base_config.yaml file exists in the current working directory
+    cwd = os.getcwd()
+    base_config_path = None
+    cwd_config_path = os.path.join(cwd, "base_config.yaml")
+    if os.path.exists(cwd_config_path):
+        base_config_path = cwd_config_path
 
-def buildImage(client, raw_jinja, app_config, args):
-    print(raw_jinja)
-    print(app_config)
-
-    pull = False
-    nocache = False
-
-    print("args: %s" % args)
-    print("args.full: %s" % args.full)
-    print("args.pull: %s" % args.pull)
-    print("args.nocache: %s" % args.nocache)
-
-    if args.full or args.pull:
-        pull = True
-    if args.full or args.nocache:
-        nocache = True
-    
-    if app_config["build"].get("dockerfile"):
-        dockerfile = app_config["build"].get("dockerfile")
     else:
-        dockerfile = "Dockerfile"
+        # Check if the base_config.yaml file exists in the user's home directory
+        home_dir = os.path.expanduser("~")
+        home_config_path = os.path.join(home_dir, ".py-docker-x11", "base_config.yaml")
+        if os.path.exists(home_config_path):
+            base_config_path = home_config_path
 
-    try:
-        result = client.build(path=os.getcwd(), labels={"pdx-app-config": raw_jinja}, 
-                dockerfile=os.path.join(os.getcwd(), dockerfile),
-                tag=app_config["build"]["image"] + ":" + app_config["build"]["tag"],
-                pull=pull, nocache=nocache, decode=True) 
-
-        for message in result:
-            if 'stream' in message:
-                for line in message['stream'].splitlines():
-                    print(line)
-        return True
-    except Exception as e:
-        print(e)
-        print("Failure encountered during build process")
-        return False
-
-def pushImage(client, base_config, app_config, push):
-    if push == True or base_config.get("build").get("always_push") == True or app_config.get("build").get("always_push") == True:
-        print("Pushing image to %s:%s" % (app_config["build"]["image"], app_config["build"]["tag"]) )
-        try:
-            result = client.push(repository=app_config["build"]["image"], tag=app_config["build"]["tag"], decode=True)
-            print("Build successfully pushed.")
-            return True
-        except:
-            print("Push failed! Check your configs or your destination repository.")
-            return False
-
-def main(args):
-
-    base_config = {}
-    base_dir = os.path.join(os.path.expanduser("~"), ".py-docker-x11")
-    client = docker.APIClient(base_url='unix://home/docker/sockets/sandbox/docker.sock')
-
-    if getBaseConfig(base_dir):
-        base_config_yamlfile = getBaseConfig(base_dir)
-        with open(base_config_yamlfile) as yaml_file:
+    if base_config_path:
+        with open(base_config_path) as yaml_file:
             base_config_yaml = yaml_file.read()
-        base_config = yaml.load(base_config_yaml, Loader=yaml.SafeLoader)
-
-    if glob.glob("./configs/*.yaml"):
-        for config in glob.glob("./configs/*.yaml"):
-            raw_jinja, app_config = getAppConfig(config)
-            if buildImage(client, raw_jinja, app_config, args):
-                pushImage(client, base_config, app_config, args.push)
-
-    elif os.path.exists("app_config.yaml"):
-        raw_jinja, app_config = getAppConfig("app_config.yaml")
-        if buildImage(client, raw_jinja, app_config, args):
-            pushImage(client, base_config, app_config, args.push)
-
+        return yaml.load(base_config_yaml, Loader=yaml.SafeLoader)
     else:
-        print("app_config.yaml or config directory does not exist in the current directory. Exiting.")
+        print("No base config found!")
         sys.exit(1)
 
-if __name__ == '__main__':
+def parseArgs():
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--auto", action='store_true', default=False, help="Run all automatic builds")
+    parser.add_argument("--dry-run", action="store_true", default=False, help="Only show builds that would have occurred.")
+    parser.add_argument("--force", action='store_true', default=False, help="Force build even if images are too new")
     parser.add_argument("--full", action='store_true', default=False, help="Enables pull and nocache")
     parser.add_argument("--nocache", action='store_true', default=False, help="Do not use cache during build")
     parser.add_argument("--pull", action='store_true', default=False, help="Pull image before build")
     parser.add_argument("--push", action='store_true', help="Push image after build")
-    args = parser.parse_args()
+    parser.add_argument("--update", action='store_true', help="Run update builds")
+    return parser.parse_args()
 
-    main(args)
+def main(args):
+
+    base_config = getBaseConfig()
+    
+    if not re.match(r"^unix://", base_config["docker_socket"]):
+        base_config["docker_socket"] = "unix://" + base_config["docker_socket"]
+    
+    client = docker.APIClient(base_config["docker_socket"])
+    cwd = os.getcwd()
+
+    build_type = base_config.get("build_type")
+    print("Build Type is %s" % build_type)
+
+    if build_type == "local":
+        dag = DAG()
+
+        if args.auto:
+            app_config_files = find_yaml_files(os.path.expanduser(base_config["build"]["build_dir"]))
+        else:
+            app_config_files = find_yaml_files(cwd, recurse=False)
+
+            if os.path.exists(os.path.join(cwd, "configs")):
+                found_yaml_files = find_yaml_files(os.path.join(cwd, "configs"))
+                app_config_files.extend(find_yaml_files(os.path.join(cwd, "configs")))
+        
+        if app_config_files:
+            builds = []
+            for app_config_file in app_config_files:
+                builds.append(Build(app_config_file, args, base_config, client))
+
+            for build in builds:
+                if args.auto and not build.automatic:
+                    continue
+                for dependency in build.depends_on:
+                    dag.add_edge(dependency, build.full_image_name, build)
+
+            for build in dag.topological_sort():
+                print("Building %s" % build.app_config_file)
+                if not args.dry_run:
+                    builder = Builder(args, base_config, build, client)
+                    builder.run_build()
+
+if __name__ == '__main__':
+    main(parseArgs())

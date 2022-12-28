@@ -1,30 +1,41 @@
+build_type: "local"
+docker_socket: "/home/docker/sandbox/socket/docker.sock"
+maintenance_dir: "/home/docker/maintenance"
 appDirs:
   base: "~/.py-docker-x11"
   default: "~/.py-docker-x11/apps"
+  driver_cache: "~/.py-docker-x11/driver_cache"
   linux: "~/.py-docker-x11/apps/linux"
   windows: "~/.py-docker-x11/apps/windows"
-profileDir: "~/.py-docker-x11/profiles"
+build:
+  always_push: False
+  build_dir: "~/.py-docker-x11/builds"
+seccomp_dir: "~/.py-docker-x11/seccomp_profiles"
+profileDir: "/home/docker/sandbox/profiles"
 workDir: "~/.py-docker-x11/work"
-htpc: 
-  enabled: False
-  binary: "htpc-binary"
-docker:
-  userSubUID: 297610
-  groupSubUID: 297611
 container:
-  display: ":0.0"
+  always_pull: False
+  environment:
+    DISPLAY: ":1"
+    WAYLAND_DISPLAY: "wayland-0"
+    XDG_RUNTIME_DIR: "/tmp/xdg_runtime_dir"
+  host_userns: False
   init: "/usr/bin/dumb-init"
   mounts:
     /etc/localtime: "/etc/localtime"
   user: "sandbox"
+  user_uid: 1000
+  user_gid: 1000
 devices:
   joystick:
     enabled: False
-  audio: 
+  audio:
     enabled: False
-    paSocket: "/tmp/pulse-socket"
-  hwrender: False
-  network: True
+    pasocket: "/tmp/pulse-socket"
+  hwrender:
+    enabled: False
+  network:
+    enabled: True
 scripts:
   pre_run: "echo \"No pre_run script defined\""
   post_run: "echo \"No post_run script defined\""

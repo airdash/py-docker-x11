@@ -2,40 +2,35 @@
 {%- set application = "Firefox" %}
 
 platform: "{{ platform }}"
-platform_options:
-  debug: False
-  esync: False
-  koku_hack: False
-  pba: True
 appconfig:
-  appname: "{{ application }}"
-  exepath: "/usr/bin/firefox"
-  executable: "firefox"
-  runningExecutable: "firefox"
-  internalAppDir: "/usr/bin"
-  programArgs: ""
+  app_name: "{{ application }}"
+  app_data_src: "internal"
+  internal_state_dir: "/home/{{ container_user }}/.mozilla/firefox"
+  running_executable: "firefox"
   use_subprofiles: True
 build:
-  command: "/usr/bin/firefox"
-  entrypoint: "/usr/bin/dumb-init"
+  automatic: True
   dockerfile: "Dockerfile"
-  image: "py-docker-x11/firefox"
+  image: "linux/firefox"
   tag: "latest"
+  dockerfile_update:
+    - USER root
+    - apt-get update && apt-get dist-upgrade -y
+    - USER sandbox
 container:    
-  image: "py-docker-x11/firefox"
+  command: ["/usr/bin/firefox", "--no-remote"]
+  gpu_hook:
+    enabled: True
+  image: "linux/firefox"
   tag: "latest"
+  shm_size: "1G"
+  mounts:
+    _full_profile_dir/Downloads: "/home/{{ container_user }}/Downloads"
+    _full_profile_dir/cache: "/home/{{ container_user }}/.cache"
 devices:
   audio: 
-    enabled: True
+    enabled: False
   hwrender: 
     enabled: True
   joystick: 
     enabled: False
-  network:
-    enabled: True
-scripts:
-  post_run: |
-      #!/bin/sh
-  
-      sleep 10
-      xgamma -gamma 1.0
