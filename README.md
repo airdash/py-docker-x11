@@ -23,5 +23,5 @@ Example screenshots:
 ![Arduino IDE for Linux](/screenshots/py-docker-x11-2.jpg)
 
 py-docker-x11 is designed to run with a user namespaced Docker daemon, and in fact it is absolutely recommended that you
-run it in this way. While the images are also designed to run as an unprivileged user, user-namespacing will ensure that the
-Docker daemon itself is also unprivileged.
+run it in this way. While the images inside of the py-docker-x11-builds repository are also designed to run as an unprivileged user, 
+user-namespacing will ensure that the Docker daemon itself is also unprivileged.
