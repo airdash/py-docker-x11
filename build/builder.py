@@ -43,7 +43,7 @@ class Builder:
                 return 0
 
         # Resolve dependencies for the build
-        self.__resolve_dependencies()
+        self._resolve_dependencies()
 
         if not image_exists_locally and self.app_config["build"].get("remote"):
             print("[WARN] Could not find image locally, attempting pull...")
@@ -52,13 +52,13 @@ class Builder:
             except:
                 print("[WARN] Could not find image remotely.")
 
-        dockerfile, inline_dockerfile = self.__get_dockerfile(image_exists_locally, image_exists_remotely)
-        build_result = self.__build_image(dockerfile, inline_dockerfile)
+        dockerfile, inline_dockerfile = self._get_dockerfile(image_exists_locally, image_exists_remotely)
+        build_result = self._build_image(dockerfile, inline_dockerfile)
 
-    def __resolve_dependencies(self):
+    def _resolve_dependencies(self):
         # If the image requires a video driver, pull it in
         if self.app_config["build"].get("install_gpu_driver"):
-            drivers_updated = self.__update_drivers()
+            drivers_updated = self._update_drivers()
     
         # If the app requires external code dependencies, resolve them
         if self.app_config["build"].get("dependencies", False):
@@ -72,7 +72,7 @@ class Builder:
                 github_release_dependencies = self.app_config["build"]["dependencies"]["github_releases"]
                 resolve_github_release_dependencies(github_release_dependencies, self.build_dir)
     
-    def __get_dockerfile(self, image_exists_locally, image_exists_remotely):
+    def _get_dockerfile(self, image_exists_locally, image_exists_remotely):
     
         dockerfile = self.app_config["build"].get("dockerfile")
         inline_dockerfile = None
@@ -96,7 +96,7 @@ class Builder:
     
         return dockerfile, inline_dockerfile
     
-    def __build_image(self, dockerfile, inline_dockerfile):
+    def _build_image(self, dockerfile, inline_dockerfile):
         # Build the image
         try:
             if inline_dockerfile:
@@ -123,14 +123,14 @@ class Builder:
             exit(1)
 
     
-    def __update_drivers(self):
+    def _update_drivers(self):
     
         driver_cache_path = os.path.expanduser(self.base_config["appDirs"].get("driver_cache"))
         docker_build_path = self.build_dir
         result = pull_video_driver(driver_cache_path, docker_build_path)
         return result
     
-    def __push_image(self):
+    def _push_image(self):
         # Save the build configs to variables
         base_build_config = base_config.get("build")
         app_build_config = app_config.get("build")
