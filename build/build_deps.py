@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import git
+import requests
 from distutils.version import LooseVersion
 
 ## Driver resolution functions
@@ -107,8 +108,6 @@ def resolve_script_dependencies(scripts, build_dir):
 
     # Ensure we're in the build directory so relative scripts work
     # Probably need some additional checking to ensure we're not somewhere we shouldn't be
-    print("cwd is %s" % os.getcwd())
-    print("build_dir is %s" % build_dir)
     if os.getcwd() != build_dir:
         os.chdir(build_dir)
 
@@ -125,4 +124,66 @@ def resolve_script_dependencies(scripts, build_dir):
         result = subprocess.Popen(command, cwd=os.getcwd(), env={})
         if result.wait() != 0:
             print("Error encountered while running %s" % command)
+
+
+def resolve_github_release_dependencies(releases, build_dir):
+    if os.getcwd() != build_dir:
+        os.chdir(build_dir)
+
+    for release in releases:
+        destination = release.get("destination", "./cache")
+
+        if not os.path.exists(os.path.join(os.getcwd(), destination)):
+            os.makedirs(os.path.join(os.getcwd(), destination))
+
+        if release.get("release") == "latest":
+            response = requests.get(f'https://api.github.com/repos/{release["repo"]}/releases/{release["release"]}')
+        else:
+            response = requests.get(f'https://api.github.com/repos/{release["repo"]}/releases/tags/{release["release"]}')
+
+        if response.status_code != 200:
+            print(f'URL: https://api.github.com/repos/{release["repo"]}/releases/{release["release"]}')
+            raise Exception(f'Error {response.status_code} while fetching release {release["release"]} from {release["repo"]}')
+
+        assets = response.json().get("assets", [])
+
+        for remote_file in release.get("files"):
+            file_match = None
+            
+            if remote_file.get("match"):
+                for asset in assets:
+                    file_match = re.match(remote_file.get("match"), asset["name"])
+
+                    if file_match is not None:
+                        file_match = file_match[0]
+                        break
+
+            elif remote_file.get("name"):
+                for asset in assets:
+
+                    if remote_file.get("name") == asset["name"]:
+                        file_match = remote_file.get("name")
+                        break
+
+            if file_match:
+                file_path = os.path.join(os.getcwd(), destination, file_match)
+                if not os.path.exists(file_path):
+
+                    response = requests.get(asset["browser_download_url"])
+                    if response.status_code != 200:
+                        raise Exception(f'Error {response.status_code} while fetching file {file_path}')
+                else:
+                    print("File exists, not re-downloading.")
+
+            with open(file_path, "wb") as f:
+                f.write(response.content)
+
+            if remote_file.get("symlink"):
+                symlink_path = os.path.join(os.getcwd(), destination, remote_file["symlink"])
+                try:
+                    os.unlink(symlink_path)
+                except OSError:
+                    pass
+                os.symlink(file_match, symlink_path)
+
 

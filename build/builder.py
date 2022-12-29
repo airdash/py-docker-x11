@@ -68,6 +68,9 @@ class Builder:
             elif self.app_config["build"]["dependencies"].get("scripts", False):
                 script_dependencies = self.app_config["build"]["dependencies"]["scripts"]
                 resolve_script_dependencies(script_dependencies, self.build_dir)
+            elif self.app_config["build"]["dependencies"].get("github_releases", False):
+                github_release_dependencies = self.app_config["build"]["dependencies"]["github_releases"]
+                resolve_github_release_dependencies(github_release_dependencies, self.build_dir)
     
     def __get_dockerfile(self, image_exists_locally, image_exists_remotely):
     

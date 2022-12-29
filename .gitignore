@@ -129,3 +129,6 @@ dmypy.json
 
 # Backup files
 *.bak
+
+# Ignore vim swap files
+*.sw*
